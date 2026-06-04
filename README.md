@@ -167,12 +167,6 @@ python3 relearn.py
 | `LICENSE.txt` | MIT license |
 | `requirements.txt` | Python dependencies |
 
----------------------------|----------------------------------------------|
-|`relearn_test.py`          |Minimal CLI script — recommended for first use|
-|`ninja7h_clutch_relearn.py`|Full CLI script with logging                  |
-|`ninja7h_gui.py`           |Cross-platform GUI (CustomTkinter)            |
-|`requirements.txt`         |Python dependencies                           |
-
 -----
 
 ## Disclaimer
