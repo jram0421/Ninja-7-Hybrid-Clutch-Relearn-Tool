@@ -104,7 +104,7 @@ pip install python-can gs-usb pyusb
 On macOS, `sudo` is required to access USB devices:
 
 ```bash
-sudo python3 relearn_test.py
+sudo python3 relearn.py
 ```
 
 #### macOS — Virtual Environment (recommended)
@@ -113,7 +113,7 @@ sudo python3 relearn_test.py
 python3 -m venv ~/ninja7h-venv
 source ~/ninja7h-venv/bin/activate
 pip install python-can gs-usb pyusb
-sudo ~/ninja7h-venv/bin/python relearn_test.py
+sudo ~/ninja7h-venv/bin/python relearn.py
 ```
 
 -----
@@ -125,7 +125,7 @@ sudo ~/ninja7h-venv/bin/python relearn_test.py
 Verifies the UCAN is detected and frames can be sent. Uses hardware loopback — no bike or termination resistor needed.
 
 ```bash
-python3 relearn_test.py --test
+python3 relearn.py --test
 ```
 
 Expected output:
@@ -147,7 +147,7 @@ Starting keepalive — Ctrl+C to stop.
 ### Live Mode (connected to bike)
 
 ```bash
-python3 relearn_test.py
+python3 relearn.py
 ```
 
 1. Connect UCAN CANH/CANL to the bike’s diagnostic port via the Euro5 adapter
@@ -161,8 +161,13 @@ python3 relearn_test.py
 
 ## Files
 
-|File                       |Description                                   |
-|---------------------------|----------------------------------------------|
+| File | Description |
+|------|-------------|
+| `relearn.py` | Clutch relearn utility |
+| `LICENSE.txt` | MIT license |
+| `requirements.txt` | Python dependencies |
+
+---------------------------|----------------------------------------------|
 |`relearn_test.py`          |Minimal CLI script — recommended for first use|
 |`ninja7h_clutch_relearn.py`|Full CLI script with logging                  |
 |`ninja7h_gui.py`           |Cross-platform GUI (CustomTkinter)            |
