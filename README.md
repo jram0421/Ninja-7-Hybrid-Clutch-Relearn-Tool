@@ -41,8 +41,8 @@ Background threads can drop USB driver handles on macOS and Windows. This script
 |Item                           |Link                     |
 |-------------------------------|-------------------------|
 |OBD-2 Male Pigtail             |<https://a.co/d/0aG9OiDr>|
-|Kawasaki → OBD-2 Female Adapter|<https://a.co/d/0dMtmcBJ>|
-|FYSETC UCAN Adapter            |<https://a.co/d/09srgm0J>|
+|Kawasaki → OBD-2 Female Adapter|<https://a.co/d/09srgm0J>|
+|FYSETC UCAN Adapter            |<https://a.co/d/0dMtmcBJ>|
 
 ### Wiring the OBD-2 Male Pigtail to the UCAN
 
