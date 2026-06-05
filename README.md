@@ -1,182 +1,170 @@
-# Ninja 7 Hybrid — Clutch Relearn Tool
+# Kawasaki Ninja 7 Hybrid — Clutch Relearn Utility
 
-Open source diagnostic tool for performing the clutch relearn procedure on the Kawasaki Ninja 7 Hybrid (2024+ MY) after an oil change, without requiring a dealer visit or proprietary software.
+A cross-platform Python utility for establishing and maintaining the UDS diagnostic session required to perform a clutch calibration/relearn procedure on the Kawasaki Ninja 7 Hybrid.
 
-## Background
+Uses a **FYSETC UCAN** adapter running [`candleLight`](https://github.com/candle-usb/candleLight_fw) firmware to send keep-alive frames over the vehicle’s CAN bus. Supports **macOS**, **Windows**, and **Linux**.
 
-The Kawasaki Ninja 7 Hybrid requires a clutch relearn procedure after every oil change due to the wet clutch interacting with fresh oil viscosity. Kawasaki’s official position is that this requires the KDS (Kawasaki Diagnostic System) dealer tool. This project implements the minimal UDS diagnostic session required to hold the ECU open while the rider performs the on-bike button sequence — replacing a ~$100+ dealer visit with a $15 USB adapter and a Python script.
-
-This project was developed in the spirit of right to repair. The DMCA (2021/2024 exemptions) explicitly permits vehicle owners to access their own diagnostic systems for maintenance purposes.
+> **Note:** Any adapter running `candleLight` firmware should work in place of the FYSETC UCAN (e.g. Canable, Canable Pro, Cantact). The UCAN is simply what this procedure was developed and tested with.
 
 -----
 
-## Hardware Required
-
-- **FYSETC UCAN** (or any candleLight-compatible GS-USB CAN adapter)
-- **Euro5 6-pin to OBD2 adapter cable** (ISO/DIS 19689)
-- A laptop or PC (Windows or macOS)
+> ⚠️ **Disclaimer:** This is an independent, community-developed tool and is not affiliated with, endorsed by, or supported by Kawasaki Motors Corp. Use at your own risk. Performing diagnostic or calibration procedures on your vehicle’s ECU carries inherent risk, including potential damage to the transmission control system if steps are performed incorrectly or out of order. Always verify your wiring before powering on. The authors assume no liability for any damage to your vehicle, equipment, or data resulting from use of this tool.
 
 -----
 
-## Wiring
+## How It Works
 
-### Ninja 7H Diagnostic Port → UCAN
-
-The Ninja 7 Hybrid uses a **Euro5 ISO/DIS 19689 6-pin red connector**.
+The script uses a sequential, deterministic timing architecture to hold the ECU in diagnostic mode throughout the entire calibration sequence:
 
 ```
-Euro5 6-Pin        Signal        OBD2 Pin    UCAN Terminal
-─────────────────────────────────────────────────────────
-Pin 2          →   CAN High  →   Pin 6    →   CANH
-Pin 5          →   CAN Low   →   Pin 14   →   CANL
-Pin 3          →   Ground    →   Pin 4/5  →   GND (if needed)
-Pin 4          →   VBAT 12V  →   Pin 16   →   (not used)
-Pin 6          →   K-Line    →   Pin 7    →   (not used)
-Pin 1          →   —         →   —        →   (not used)
+[ Script ]                          [ UCAN Adapter ]                  [ Ninja 7 ECU ]
+    │                                      │                                 │
+    │──── 1. Diagnostic Session Request ──>│                                 │
+    │     ID: 0x764  Data: 02 10 80        │──── Forward Frame ─────────────>│
+    │                                      │                                 │
+    │<─── 2. Session Confirmation ─────────│<─── Handshake Accepted ─────────│
+    │     ID: 0x746  Data: 02 50 80        │     (Session Open)              │
+    │                                      │                                 │
+    │──── 3. Keep-Alive Loop (2s) ────────>│                                 │
+    │     ID: 0x764  Data: 01 3E           │──── Prevents Timeout Abort ────>│
 ```
 
-If using a pre-made Euro5 → OBD2 adapter cable, connect the UCAN screw terminals to the OBD2 end:
-
-- **CANH** → OBD2 Pin 6
-- **CANL** → OBD2 Pin 14
-
-The UCAN has onboard termination resistors (2x 59Ω = ~118Ω) enabled by default, which satisfies the CAN bus 120Ω termination requirement.
+**Why inline timing instead of `send_periodic`?**  
+Background threads can drop USB driver handles on macOS and Windows. This script handles read and write sequentially in a single loop, ensuring uninterrupted 2-second keep-alive timing with no OS-level race conditions.
 
 -----
 
-## Protocol
+## Hardware & Wiring
 
-Communication uses UDS (ISO 14229) over CAN at **500kbps**.
+### Required Hardware
 
-|Direction      |CAN ID |
-|---------------|-------|
-|Tool → ECU (TX)|`0x764`|
-|ECU → Tool (RX)|`0x746`|
+|Item                           |Link                     |
+|-------------------------------|-------------------------|
+|OBD-2 Male Pigtail             |<https://a.co/d/0aG9OiDr>|
+|Kawasaki → OBD-2 Female Adapter|<https://a.co/d/0dMtmcBJ>|
+|FYSETC UCAN Adapter            |<https://a.co/d/09srgm0J>|
 
-### Frames Sent
+### Wiring the OBD-2 Male Pigtail to the UCAN
 
-|Step|Frame     |Meaning                                                 |
-|----|----------|--------------------------------------------------------|
-|1   |`02 10 80`|DiagnosticSessionControl — Kawasaki-specific session    |
-|2   |`02 3E 80`|TesterPresent (suppress response) — sent every 2 seconds|
+The Kawasaki diagnostic port uses a proprietary connector. Use the Kawasaki → OBD-2 female adapter to bridge it, then connect the OBD-2 male pigtail and wire it to the UCAN as follows:
 
-The relearn sequence itself is performed on the bike via the instrument cluster and button combo. The script holds the diagnostic session open while you complete it.
+|OBD-2 Pin|Signal  |UCAN Terminal|
+|---------|--------|-------------|
+|Pin 4    |Ground  |GND          |
+|Pin 6    |CAN High|CANH         |
+|Pin 14   |CAN Low |CANL         |
+
+The diagnostic port is located at the **rear of the bike**. Connect the Kawasaki adapter to the diagnostic port, mate the OBD-2 pigtail to it, then connect the pigtail wires to the UCAN terminals before plugging the UCAN into your computer.
+
+> ⚠️ **Important:** Tape off all unused OBD-2 pigtail wires individually before connecting. Exposed wires contacting each other or bare metal can cause shorts.
+
+## Prerequisites
+
+- **Direct USB connection** — plug the UCAN adapter directly into your host computer; avoid unpowered hubs
 
 -----
 
-## Software Setup
+## Installation
 
-### Dependencies
+> **Note:** Python 3 must be installed on all platforms before proceeding. macOS additionally requires [Homebrew](https://brew.sh) (`brew`). See [python.org/downloads](https://www.python.org/downloads/) and [brew.sh](https://brew.sh) if either is not already installed.
 
-```
-python-can
-gs-usb
-pyusb
-```
-
-Install via pip:
-
-```bash
-pip install python-can gs-usb pyusb
-```
-
-Or using the included requirements file:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Windows — Driver Setup (one-time)
-
-1. Download and run [Zadig](https://zadig.akeo.ie/)
-1. Plug in the UCAN via USB
-1. Select the UCAN device from the dropdown
-1. Set the driver to **libusb-win32**
-1. Click Install Driver
-
-### macOS — Setup
+### macOS
 
 ```bash
 brew install libusb
-pip install python-can gs-usb pyusb
+
+python3 -m venv venv
+source venv/bin/activate
+pip install python-can gs_usb pyusb
 ```
 
-On macOS, `sudo` is required to access USB devices:
+### Windows
+
+```cmd
+pip install python-can gs_usb pyusb libusb
+```
+
+After installing, assign the correct kernel driver via [Zadig](https://zadig.akeo.ie/):
+
+1. Open Zadig → **Options** → **List All Devices**
+1. Select your adapter (`UCAN` or `Geschwister Schneider USB/CAN`)
+1. Set the driver to **WinUSB**
+1. Click **Replace Driver** (or **Install Driver**)
+
+### Linux
 
 ```bash
-sudo python3 relearn.py
+pip install python-can
+sudo ip link set can0 up type can bitrate 500000
 ```
 
-#### macOS — Virtual Environment (recommended)
-
-```bash
-python3 -m venv ~/ninja7h-venv
-source ~/ninja7h-venv/bin/activate
-pip install python-can gs-usb pyusb
-sudo ~/ninja7h-venv/bin/python relearn.py
-```
+> Linux handles `candleLight` hardware natively via SocketCAN — no userspace driver needed.
 
 -----
 
 ## Usage
 
-### Test Mode (UCAN connected, no bike required)
-
-Verifies the UCAN is detected and frames can be sent. Uses hardware loopback — no bike or termination resistor needed.
-
 ```bash
-python3 relearn.py --test
+python kawasaki_clutch_relearn.py
 ```
 
-Expected output:
-
-```
-Found: UCAN USB to CAN adapter  Bus=1  Addr=1
-Opening CAN bus (hardware loopback)...
-Bus open.
-
-Press ENTER to send diagnostic session request...
-  TX [02 10 80]  DiagnosticSession 0x80
-  RX [02 10 80]  ID=0x764  (loopback confirmed)
-
-Starting keepalive — Ctrl+C to stop.
-  TX [02 3E 80]  TesterPresent #1
-  RX [02 3E 80]  ID=0x764  (loopback confirmed)
-```
-
-### Live Mode (connected to bike)
-
-```bash
-python3 relearn.py
-```
-
-1. Connect UCAN CANH/CANL to the bike’s diagnostic port via the Euro5 adapter
-1. Turn the bike on (do not start engine)
-1. Run the script
-1. Press ENTER when prompted to open the diagnostic session
-1. Perform the button combo on the bike and follow the instrument cluster prompts
-1. Press Ctrl+C when the relearn is complete
+The script auto-detects your OS and selects the appropriate CAN backend (`socketcan` on Linux, `gs_usb` on macOS/Windows).
 
 -----
 
-## Files
+## Calibration Procedure
 
-| File | Description |
-|------|-------------|
-| `relearn.py` | Clutch relearn utility |
-| `LICENSE.txt` | MIT license |
-| `requirements.txt` | Python dependencies |
+Follow these steps in order. Do not skip or reorder.
+
+### Step 1 — Prepare the Bike
+
+1. Confirm the engine is **OFF**
+1. Turn the key switch to **ON**
+1. Set the kill switch to **RUN** — the instrument cluster must be fully active
+
+### Step 2 — Establish the Software Link
+
+1. Run the script on your host computer
+1. Wait for the session confirmation: `[RECV] Valid response captured! Data: 02 50 80 ...`
+1. Leave the terminal open — closing it will drop the diagnostic session
+
+### Step 3 — Execute the Relearn
+
+1. **Start the engine** normally
+1. Locate the **e-boost button** and **START button** on the handlebar controls
+1. **Press and hold both buttons simultaneously**
+1. Hold until the **boost gauge is fully illuminated**, then release both buttons
+1. Wait for the boost gauge to **count down to zero** — this indicates the relearn is complete
+
+### Step 4 — Shut Down Cleanly
+
+1. Return to your terminal and press **`Ctrl+C`** to end the script
+1. Turn the key switch to **OFF** to write the calibration values to ECU non-volatile memory
+
+> ⚠️ **Do not power down the bike before pressing `Ctrl+C`.** The script performs a clean bus shutdown that ensures calibration data is committed correctly.
 
 -----
 
-## Disclaimer
+## Script Reference
 
-This tool is provided for personal vehicle maintenance use only. Use at your own risk. The authors are not responsible for any damage to your vehicle or ECU. This tool does not flash firmware, modify ECU calibration, or write any data to the vehicle — it only opens a read/diagnostic session and sends keepalive frames.
+|Parameter          |Value   |Description                 |
+|-------------------|--------|----------------------------|
+|`CAN_CHANNEL`      |`0`     |Hardware channel index      |
+|`CAN_BITRATE`      |`500000`|Kawasaki OBD CAN bus speed  |
+|Session Request ID |`0x764` |ECU diagnostic frame address|
+|Session Response ID|`0x746` |ECU acknowledgment address  |
+|Keep-Alive Interval|`2.0s`  |Tester Present cadence      |
 
-This project is not affiliated with or endorsed by Kawasaki Motors Corporation.
+### Troubleshooting
+
+|Symptom                      |Likely Cause                                                        |
+|-----------------------------|--------------------------------------------------------------------|
+|`Auto-initialization failed` |Wrong driver (Windows) or `libusb` not installed (macOS)            |
+|`Timeout — no valid response`|Ignition not ON, kill switch in KILL position, or wrong CAN bitrate |
+|`CAN ERROR — No ACK`         |Adapter not properly connected to OBD port, or bus termination issue|
 
 -----
 
 ## License
 
-MIT License — see `LICENSE` for details.
+MIT License — see [`LICENSE`](LICENSE) for full text.
