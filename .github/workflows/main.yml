@@ -51,7 +51,7 @@ jobs:
         pyinstaller --onedir --windowed --name="kawasaki_clutch_relearn" --collect-all gs_usb --collect-all can kawasaki_clutch_relearn.py
 
     - name: Upload Build Artifacts
-      uses: actions/artifacts@v4
+      uses: actions/upload-artifact@v4 # <--- FIXED THIS LINE
       with:
         name: ${{ matrix.artifact_name }}
         path: ${{ matrix.output_file }}
