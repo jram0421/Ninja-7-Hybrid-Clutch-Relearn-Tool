@@ -37,7 +37,7 @@ jobs:
         if-no-files-found: error
 
   build-mac:
-    name: Build macOS App & DMG
+    name: Build macOS Standalone Binary
     runs-on: macos-latest
     steps:
     - name: Checkout Repository
@@ -56,30 +56,20 @@ jobs:
         python -m pip install --upgrade pip
         pip install python-can gs_usb pyusb pyinstaller
 
-    - name: Build App Bundle with PyInstaller
+    - name: Build Standalone Binary with PyInstaller
       run: |
-        pyinstaller --onedir --console \
+        # Changed to --onefile and removed --windowed/--onedir wrappers.
+        # This compiles the tool down into a single raw, runnable terminal binary.
+        pyinstaller --onefile \
           --name="kawasaki_clutch_relearn" \
           --add-binary="/opt/homebrew/lib/libusb-1.0.dylib:." \
           --collect-all gs_usb \
           --collect-all can \
           kawasaki_clutch_relearn.py
 
-    - name: Create Standalone DMG Installer
-      run: |
-        # Create a temporary staging directory for the installer layout
-        mkdir -p dmg_stage
-        
-        # Copy the raw output folder into the staging area, adding the .app extension 
-        # so macOS treats it as a single clickable application launch bundle
-        cp -R dist/kawasaki_clutch_relearn dmg_stage/kawasaki_clutch_relearn.app
-        
-        # Build the final mountable .dmg file
-        hdiutil create -volname "Kawasaki Relearn Installer" -srcfolder dmg_stage -ov -format UDZO dist/kawasaki_clutch_relearn.dmg
-
-    - name: Upload macOS DMG Artifact
+    - name: Upload macOS Binary Artifact
       uses: actions/upload-artifact@v4
       with:
         name: kawasaki-clutch-relearn-mac
-        path: dist/kawasaki_clutch_relearn.dmg
+        path: dist/kawasaki_clutch_relearn
         if-no-files-found: error
