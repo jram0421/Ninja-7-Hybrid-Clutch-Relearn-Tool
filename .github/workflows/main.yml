@@ -58,17 +58,19 @@ jobs:
 
     - name: Build App Bundle with PyInstaller
       run: |
-        pyinstaller --onedir --windowed --name="kawasaki_clutch_relearn" --collect-all gs_usb --collect-all can kawasaki_clutch_relearn.py
+        # Changed --windowed to --console so macOS spawns a Terminal window
+        # Added paths to ensure libusb.dylib links properly from Homebrew environments
+        pyinstaller --onedir --console \
+          --name="kawasaki_clutch_relearn" \
+          --add-binary="/opt/homebrew/lib/libusb-1.0.dylib:." \
+          --collect-all gs_usb \
+          --collect-all can \
+          kawasaki_clutch_relearn.py
 
     - name: Create Standalone DMG Installer
       run: |
-        # Create a temporary staging directory for the installer layout
         mkdir -p dmg_stage
-        
-        # Copy the compiled .app bundle into the staging area
         cp -R dist/kawasaki_clutch_relearn.app dmg_stage/
-        
-        # Use native macOS hdiutil to compress the staging folder into a mountable .dmg file
         hdiutil create -volname "Kawasaki Relearn Installer" -srcfolder dmg_stage -ov -format UDZO dist/kawasaki_clutch_relearn.dmg
 
     - name: Upload macOS DMG Artifact
