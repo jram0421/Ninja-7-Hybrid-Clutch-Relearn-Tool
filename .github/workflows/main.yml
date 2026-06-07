@@ -25,19 +25,36 @@ jobs:
         python -m pip install --upgrade pip
         pip install python-can gs_usb pyusb libusb pyinstaller
 
-    - name: Download and Extract Clean libusb Binary
+    - name: Extract libusb Binary from Specified Path
       shell: pwsh
       run: |
-        # Download the official compiled libusb binaries directly from GitHub releases
+        # Download the target compiled library asset bundle directly
         Invoke-WebRequest -Uri "https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z" -OutFile "libusb.7z"
         
-        # Extract the archive using 7-Zip (built natively into the GitHub Windows runner image)
+        # Extract the archive into a dedicated directory using the native runner utility
         7z x libusb.7z -o"libusb_extracted"
         
-        # Copy the true, isolated 64-bit DLL straight into our repository workspace root
-        Copy-Item -Path "libusb_extracted\VS2015-x64\dll\libusb-1.0.dll" -Destination .\libusb-1.0.dll
+        # Pull the 64-bit binary from your specified layout directory
+        $TargetDllPath = "libusb_extracted\VS2025\MS64\dll\libusb-1.0.dll"
         
-        Write-Output "Successfully downloaded and verified 64-bit libusb-1.0.dll"
+        if (Test-Path $TargetDllPath) {
+            Write-Output "Target matched! Copying library file from: $TargetDllPath"
+            Copy-Item -Path $TargetDllPath -Destination .\libusb-1.0.dll
+        } else {
+            # Safety check: If the zip layout slightly varies, print the root directory contents to debug
+            Write-Output "[WARNING] Specific path not found. Checking root folders inside archive..."
+            Get-ChildItem -Path "libusb_extracted" -Recurse -Filter "libusb-1.0.dll" | Select-Object -First 1 | ForEach-Object {
+                Write-Output "Located fallback target file at: $($_.FullName)"
+                Copy-Item -Path $_.FullName -Destination .\libusb-1.0.dll
+            }
+        }
+        
+        # Final confirmation block for the subsequent build step
+        if (Test-Path .\libusb-1.0.dll) {
+            Write-Output "Successfully staged libusb-1.0.dll in workspace root."
+        } else {
+            Throw "Critical Error: Failed to secure a valid libusb-1.0.dll file."
+        }
 
     - name: Build Executable with PyInstaller
       run: |
