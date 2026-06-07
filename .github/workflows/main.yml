@@ -25,9 +25,32 @@ jobs:
         python -m pip install --upgrade pip
         pip install python-can gs_usb pyusb libusb pyinstaller
 
+    - name: Locate and Package Windows libusb Binary
+      shell: pwsh
+      run: |
+        # Locate where pip installed the libusb library files on the Windows runner
+        $LibUsbPath = python -c "import os, importlib.util; spec = importlib.util.find_spec('libusb'); print(spec.submodule_search_locations[0] if spec else '')"
+        $DllSource = Join-Path $LibUsbPath "_platform\_windows\x64\libusb-1.0.dll"
+        
+        # Fallback configuration path just in case wheel variations differ
+        if (-not (Test-Path $DllSource)) {
+            $DllSource = Join-Path $LibUsbPath "_platform_mechanics\x64\libusb-1.0.dll"
+        }
+        
+        Write-Output "Targeting libusb DLL from: $DllSource"
+        
+        # Copy the DLL into the repository root so PyInstaller can easily grab it
+        Copy-Item -Path $DllSource -Destination .\libusb-1.0.dll
+
     - name: Build Executable with PyInstaller
       run: |
-        pyinstaller --onefile --name="kawasaki_clutch_relearn" --collect-all gs_usb --collect-all can kawasaki_clutch_relearn.py
+        # --add-binary="libusb-1.0.dll;." embeds the file directly into the root execution space
+        pyinstaller --onefile \
+          --name="kawasaki_clutch_relearn" \
+          --add-binary="libusb-1.0.dll;." \
+          --collect-all gs_usb \
+          --collect-all can \
+          kawasaki_clutch_relearn.py
 
     - name: Upload Windows Artifact
       uses: actions/upload-artifact@v4
@@ -58,8 +81,6 @@ jobs:
 
     - name: Build Standalone Binary with PyInstaller
       run: |
-        # Changed to --onefile and removed --windowed/--onedir wrappers.
-        # This compiles the tool down into a single raw, runnable terminal binary.
         pyinstaller --onefile \
           --name="kawasaki_clutch_relearn" \
           --add-binary="/opt/homebrew/lib/libusb-1.0.dylib:." \
