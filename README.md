@@ -167,4 +167,4 @@ Follow these steps in order. Do not skip or reorder.
 
 ## License
 
-MIT License — see [`LICENSE`](LICENSE) for full text.
+LGPL-2.1 License — see [`LICENSE`](LICENSE) for full text.
