@@ -28,41 +28,45 @@ jobs:
     - name: Extract libusb Binary from Specified Path
       shell: pwsh
       run: |
-        # Download the target compiled library asset bundle directly
-        Invoke-WebRequest -Uri "https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z" -OutFile "libusb.7z"
+        # Download the specific v1.0.30 compiled asset bundle from GitHub releases
+        Invoke-WebRequest -Uri "https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.7z" -OutFile "libusb.7z"
         
-        # Extract the archive into a dedicated directory using the native runner utility
+        # Extract the archive into a dedicated folder
         7z x libusb.7z -o"libusb_extracted"
         
-        # Pull the 64-bit binary from your specified layout directory
+        # Pull the 64-bit binary from your specified directory mapping
         $TargetDllPath = "libusb_extracted\VS2025\MS64\dll\libusb-1.0.dll"
         
         if (Test-Path $TargetDllPath) {
             Write-Output "Target matched! Copying library file from: $TargetDllPath"
             Copy-Item -Path $TargetDllPath -Destination .\libusb-1.0.dll
         } else {
-            # Safety check: If the zip layout slightly varies, print the root directory contents to debug
-            Write-Output "[WARNING] Specific path not found. Checking root folders inside archive..."
-            Get-ChildItem -Path "libusb_extracted" -Recurse -Filter "libusb-1.0.dll" | Select-Object -First 1 | ForEach-Object {
-                Write-Output "Located fallback target file at: $($_.FullName)"
-                Copy-Item -Path $_.FullName -Destination .\libusb-1.0.dll
-            }
+            # Safety fallback mechanism: If folder structures pivot slightly, recursively look for it
+            Write-Output "[WARNING] Specific path not found. Scanning alternative locations inside extraction root..."
+            Get-ChildItem -Path "libusb_extracted" -Recurse -Filter "libusb-1.0.dll" | 
+                Where-Object { $_.FullName -match "MS64" -or $_.FullName -match "x64" } | 
+                Select-Object -First 1 | ForEach-Object {
+                    Write-Output "Located target file at: $($_.FullName)"
+                    Copy-Item -Path $_.FullName -Destination .\libusb-1.0.dll
+                }
         }
         
-        # Final confirmation block for the subsequent build step
+        # Ensure file validation passes before passing off to PyInstaller
         if (Test-Path .\libusb-1.0.dll) {
             Write-Output "Successfully staged libusb-1.0.dll in workspace root."
         } else {
-            Throw "Critical Error: Failed to secure a valid libusb-1.0.dll file."
+            Throw "Critical Error: Failed to secure a valid libusb-1.0.dll file from the archive."
         }
 
     - name: Build Executable with PyInstaller
+      shell: pwsh
       run: |
-        pyinstaller --onefile \
-          --name="kawasaki_clutch_relearn" \
-          --add-binary="libusb-1.0.dll;." \
-          --collect-all gs_usb \
-          --collect-all can \
+        # Switched multi-line continuations from linux backslashes (\) to powershell backticks (`)
+        pyinstaller --onefile `
+          --name="kawasaki_clutch_relearn" `
+          --add-binary="libusb-1.0.dll;." `
+          --collect-all gs_usb `
+          --collect-all can `
           kawasaki_clutch_relearn.py
 
     - name: Upload Windows Artifact
